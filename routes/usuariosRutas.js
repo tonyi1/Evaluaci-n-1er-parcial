@@ -1,63 +1,95 @@
-import { json, Router } from "express";
-import {login, register, obtenerUsuarios, buscarUsuarioPorId, borrarUsuarioPorId,editarUsuarioPorId} from "../db/usuariosDB.js";
+import { Router } from "express";
+import {
+    login,
+    register,
+    obtenerUsuarios,
+    buscarUsuarioPorId,
+    borrarUsuarioPorId,
+    editarUsuarioPorId
+} from "../db/usuariosDB.js";
+import { usuarioAutorizado } from "../middelwares/funcionesPassword.js";
+
 const router = Router();
 
-router.post("/registro", async(req, res)=>{
-
+//  Registro de usuario
+router.post("/registro", async (req, res) => {
     const respuesta = await register(req.body);
-    //console.log ("bien");
-    console.log(respuesta.mensajeOriginal)
     res.cookie("token",respuesta.token).status(respuesta.status).json(respuesta.mensajeUsuario);
 });
 
+//  Inicio de sesión
+router.post("/acceso", async (req, res) => {
+    console.log(req.body);
+    
+    const respuesta = await login(req.body);
 
-
-router.post("/acceso", async(req,res)=>{
-    const respuesta=await login(req.body);
-    console.log(respuesta.mensajeOriginal)
     res.cookie("token",respuesta.token).status(respuesta.status).json(respuesta.mensajeUsuario);
 });
 
-router.get("/salir", async(req, res)=>{
-    res.json("Estas en acceso")
+//  Cerrar sesión
+router.get("/salir", (req, res) => {
+    res.cookie("token", "", { expires: new Date(0) }).status(200).json("Sesión cerrada correctamente");
 });
 
-router.get("/usuariosLogeados",async(req,res)=>{
-    res.json("Usuarios combencionales y administradores logueados");
+//  Usuarios logueados
+router.get("/usuariosLogeados", async(req,res)=>{
+    const respuesta=usuarioAutorizado(req.cookies.token,req);
+    res.status(respuesta.status).json(respuesta.mensajeUsuario);
+    //res.json("Usuarios convncionales y administradores logueados");
 });
 
+//  Administradores (falta implementar `adminAutorizado`)
 router.get("/administradores",async(req,res)=>{
-    res.json("Solo administradores logeados");
+    const respuesta = adminAutorizado(req);
+    res.status(respuesta.status).json(respuesta.mensajeUsuario);
 });
 
-router.get("/cualquierusuario",async(req,res)=>{
-res.json("Todos los usuarios sin loguearse");
+//  Cualquier usuario
+router.get("/cualquierusuario", async (req, res) => {
+    res.json("Todos los usuarios sin loguearse");
 });
 
-// Obtener todos los usuarios
+//  Obtener todos los usuarios
 router.get("/usuarios", async (req, res) => {
     const respuesta = await obtenerUsuarios();
-    res.status(respuesta.status).json(respuesta);
+    console.log(respuesta.mensajeOriginal)
+    res.status(respuesta.status).json(respuesta.token);
 });
 
-// Buscar usuario por ID
+//  Buscar usuario por ID
 router.get("/usuario/:id", async (req, res) => {
-    const idLimpio = req.params.id.trim(); // Eliminar espacios y caracteres no visibles
+    const idLimpio = req.params.id.trim(); // Elimina espacios y caracteres invisibles
+
+    // Validar formato del ID antes de consultar en MongoDB
+    if (!idLimpio.match(/^[a-fA-F0-9]{24}$/)) {
+        return res.status(400).json({ mensaje: "ID de usuario no válido" });
+    }
+
     const respuesta = await buscarUsuarioPorId(idLimpio);
-    res.status(respuesta.status).json(respuesta);
+    res.status(respuesta.status).json(respuesta.mensajeOriginal);
 });
 
-
-
-// Borrar usuario por ID
+//  Borrar usuario por ID
 router.delete("/usuario/:id", async (req, res) => {
-    const respuesta = await borrarUsuarioPorId(req.params.id);
+    const idLimpio = req.params.id.trim();
+
+    if (!idLimpio.match(/^[a-fA-F0-9]{24}$/)) {
+        return res.status(400).json({ mensaje: "ID de usuario no válido" });
+    }
+
+    const respuesta = await borrarUsuarioPorId(idLimpio);
     res.status(respuesta.status).json(respuesta);
 });
 
-// Actualizar  usuario por ID
+//  Actualizar usuario por ID
 router.put("/usuario/:id", async (req, res) => {
-    const respuesta = await editarUsuarioPorId(req.params.id, req.body);
+    const idLimpio = req.params.id.trim();
+
+    if (!idLimpio.match(/^[a-fA-F0-9]{24}$/)) {
+        return res.status(400).json({ mensaje: "ID de usuario no válido" });
+    }
+
+    const respuesta = await editarUsuarioPorId(idLimpio, req.body);
     res.status(respuesta.status).json(respuesta);
 });
 
